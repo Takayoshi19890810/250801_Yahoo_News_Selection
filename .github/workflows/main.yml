@@ -2,8 +2,8 @@ name: Yahoo News Scraper Daily
 
 on:
   schedule:
-    - cron: '0 20 * * *'  # 毎日日本時間 5:00 実行（UTCで20:00）
-  workflow_dispatch:       # 手動実行も可能
+    - cron: '0 20 * * *'  # 日本時間 5:00（UTC 20:00）に毎日実行
+  workflow_dispatch:       # 手動実行も許可
 
 jobs:
   run-script:
@@ -13,30 +13,30 @@ jobs:
       - name: 📥 リポジトリをチェックアウト
         uses: actions/checkout@v3
 
-      - name: 🐍 Pythonをセットアップ
+      - name: 🐍 Python をセットアップ
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
 
-      - name: ⚙️ 必要パッケージをインストール
+      - name: ⚙️ 必要パッケージをインストール（Ubuntu 24.04 対応）
         run: |
           sudo apt-get update
-          sudo apt-get install -y unzip xvfb libxi6 libgconf-2-4 chromium-browser
+          sudo apt-get install -y unzip xvfb libxi6 chromium-browser
           pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: 🛡️ service_account.json を復元（Google Sheets用）
+      - name: 🔐 service_account.json を復元（Google Sheets 認証）
         run: |
           echo "${{ secrets.SERVICE_ACCOUNT_JSON }}" > service_account.json
 
-      - name: 🛡️ credentials.json を復元（PyDrive用）
+      - name: 🔐 credentials.json を復元（PyDrive 認証）
         run: |
           echo "${{ secrets.PYDRIVE_CREDENTIALS_JSON }}" > credentials.json
 
-      - name: ▶️ スクレイピングスクリプトを実行
+      - name: ▶️ Python スクリプトを実行
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ./service_account.json
         run: |
-          Xvfb :99 &
+          Xvfb :99 &   # 仮想ディスプレイ起動（Selenium用）
           export DISPLAY=:99
           python main.py
