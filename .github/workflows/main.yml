@@ -1,0 +1,31 @@
+name: Yahoo News Scraper Daily
+
+on:
+  schedule:
+    - cron: '0 20 * * *'  # 日本時間 5:00（UTC+9 → UTC 20:00）
+  workflow_dispatch:
+
+jobs:
+  run-script:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y unzip xvfb libxi6 libgconf-2-4 chromium-browser
+        pip install -r requirements.txt
+
+    - name: Run script
+      env:
+        GOOGLE_APPLICATION_CREDENTIALS: ./service_account.json
+      run: |
+        Xvfb :99 &
+        export DISPLAY=:99
+        python main.py
