@@ -2,7 +2,7 @@ name: Yahoo News Scraper Daily
 
 on:
   schedule:
-    - cron: '0 20 * * *'  # 日本時間 5:00（UTC 20:00）に毎日実行
+    - cron: '0 20 * * *'  # 日本時間 5:00（UTCで20:00）に毎日実行
   workflow_dispatch:       # 手動実行も許可
 
 jobs:
@@ -33,10 +33,10 @@ jobs:
         run: |
           echo "${{ secrets.PYDRIVE_CREDENTIALS_JSON }}" > credentials.json
 
-      - name: ▶️ Python スクリプトを実行
+      - name: ▶️ Python スクリプトを実行（Xvfb 警告抑制）
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ./service_account.json
         run: |
-          Xvfb :99 &   # 仮想ディスプレイ起動（Selenium用）
+          Xvfb :99 -ac > /dev/null 2>&1 || echo "Xvfb warning ignored"
           export DISPLAY=:99
           python main.py
