@@ -2,30 +2,41 @@ name: Yahoo News Scraper Daily
 
 on:
   schedule:
-    - cron: '0 20 * * *'  # 日本時間 5:00（UTC+9 → UTC 20:00）
-  workflow_dispatch:
+    - cron: '0 20 * * *'  # 毎日日本時間 5:00 実行（UTCで20:00）
+  workflow_dispatch:       # 手動実行も可能
 
 jobs:
   run-script:
     runs-on: ubuntu-latest
+
     steps:
-    - uses: actions/checkout@v3
+      - name: 📥 リポジトリをチェックアウト
+        uses: actions/checkout@v3
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
+      - name: 🐍 Pythonをセットアップ
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
 
-    - name: Install dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y unzip xvfb libxi6 libgconf-2-4 chromium-browser
-        pip install -r requirements.txt
+      - name: ⚙️ 必要パッケージをインストール
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y unzip xvfb libxi6 libgconf-2-4 chromium-browser
+          pip install --upgrade pip
+          pip install -r requirements.txt
 
-    - name: Run script
-      env:
-        GOOGLE_APPLICATION_CREDENTIALS: ./service_account.json
-      run: |
-        Xvfb :99 &
-        export DISPLAY=:99
-        python main.py
+      - name: 🛡️ service_account.json を復元（Google Sheets用）
+        run: |
+          echo "${{ secrets.SERVICE_ACCOUNT_JSON }}" > service_account.json
+
+      - name: 🛡️ credentials.json を復元（PyDrive用）
+        run: |
+          echo "${{ secrets.PYDRIVE_CREDENTIALS_JSON }}" > credentials.json
+
+      - name: ▶️ スクレイピングスクリプトを実行
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ./service_account.json
+        run: |
+          Xvfb :99 &
+          export DISPLAY=:99
+          python main.py
