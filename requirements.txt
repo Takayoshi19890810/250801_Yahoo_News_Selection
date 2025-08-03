@@ -1,7 +1,7 @@
-selenium
-bs4
-openpyxl
-gspread
-oauth2client
-pydrive
-beautifulsoup4
+gspread==5.12.0
+oauth2client==4.1.3
+selenium==4.20.0
+beautifulsoup4==4.12.3
+pytz==2024.1
+pandas==2.2.2
+openpyxl==3.1.5
