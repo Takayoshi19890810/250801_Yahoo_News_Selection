@@ -1,18 +1,14 @@
 name: Yahoo News Scraper
-
 on:
   schedule:
     - cron: '30 5 * * *'  # JST 14:30
   workflow_dispatch:
-
 jobs:
   run:
     runs-on: ubuntu-latest
-
     steps:
       - name: 📅 Check out repository
         uses: actions/checkout@v3
-
       - name: 🛠 Install Chrome and Chromedriver
         run: |
           sudo apt update
@@ -21,31 +17,24 @@ jobs:
           # Install Google Chrome
           wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
           sudo dpkg -i google-chrome*.deb || sudo apt -f install -y
-
           # Get Chrome version
           CHROME_VERSION=$(google-chrome --version | grep -oP '\d+\.\d+\.\d+\.\d+')
           MAJOR_VERSION=$(echo $CHROME_VERSION | cut -d '.' -f 1)
           echo "Chrome version: $CHROME_VERSION (Major: $MAJOR_VERSION)"
-
           # Download and install matching chromedriver
           wget -O chromedriver.zip "https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/$CHROME_VERSION/linux64/chromedriver-linux64.zip"
           unzip chromedriver.zip
           sudo mv chromedriver-linux64/chromedriver /usr/local/bin/
           sudo chmod +x /usr/local/bin/chromedriver
-
       - name: 🚀 Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
-
       - name: 📊 Install dependencies
         run: pip install -r requirements.txt
-
       - name: 📄 Create credentials.json
         run: echo '${{ secrets.GOOGLE_CREDENTIALS }}' > credentials.json
-
       - name: 🔄 Run Yahoo News scraper
         run: python scrape_yahoo_news.py
-        
       - name: ✅ Done
         run: echo "Scraping completed"
