@@ -58,7 +58,7 @@ except gspread.WorksheetNotFound:
 
 # 出力スプレッドシートを設定
 sh_output = gc.open_by_key(OUTPUT_SPREADSHEET_ID)
-print(f"--- Checking output sheet for '{DATE_STR}' ---")
+print(f"--- Checking output sheet for '240804' ---")
 
 if DATE_STR in [ws.title for ws in sh_output.worksheets()]:
     date_ws = sh_output.worksheet(DATE_STR)
@@ -74,8 +74,8 @@ new_ws.update(range_name='A2', values=[['タイトル']])
 new_ws.update(range_name='A3', values=[['URL']])
 new_ws.update(range_name='A4', values=[['発行日時']])
 new_ws.update(range_name='A5', values=[['本文']])
-new_ws.update(range_name='A16', values=[['コメント数']])
-new_ws.update(range_name='A17', values=[['コメント']])
+new_ws.update(range_name='A17', values=[['コメント数']])
+new_ws.update(range_name='A18', values=[['コメント']])
 
 # ニュース記事の処理
 print("--- Starting URL processing ---")
@@ -169,15 +169,15 @@ for idx, base_url in enumerate(input_urls, start=1):
             data_to_write.append([body])
 
         # コメント数の行まで空行で埋める
-        comment_count_start_row = 16
+        comment_count_start_row = 17
         current_row_count = len(data_to_write)
         if current_row_count < comment_count_start_row:
             data_to_write.extend([['']] * (comment_count_start_row - current_row_count))
         
-        # コメント数を16行目に追加
+        # コメント数を17行目に追加
         data_to_write.append([len(comments)])
 
-        # コメントを17行目以降に追加
+        # コメントを18行目以降に追加
         for comment in comments:
             data_to_write.append([comment])
         
