@@ -98,14 +98,18 @@ for idx, base_url in enumerate(input_urls, start=1):
 
             # 記事タイトルと投稿日は1ページ目のみから取得
             if page == 1:
-                title_tag = soup.find('h1', class_='sc-1f7c32y-2')
-                title = title_tag.get_text(strip=True) if title_tag else '取得不可'
+                title_tag = soup.find('title')
+                title = title_tag.get_text(strip=True).replace(' - Yahoo!ニュース', '') if title_tag else '取得不可'
                 date_tag = soup.find('time')
                 article_date = date_tag.get_text(strip=True) if date_tag else '取得不可'
             
             # 本文部分を取得
-            body_elements = soup.find_all('p', class_='sc-1f7c32y-14')
-            body_text = '\n'.join([p.get_text(strip=True) for p in body_elements])
+            article_body_container = soup.find('article')
+            if article_body_container:
+                body_elements = article_body_container.find_all('p')
+                body_text = '\n'.join([p.get_text(strip=True) for p in body_elements])
+            else:
+                body_text = ''
             
             # 本文が見つからない場合、またはページが重複している場合は終了
             if not body_text or body_text in article_bodies:
@@ -156,7 +160,6 @@ for idx, base_url in enumerate(input_urls, start=1):
         ]
         
         # 本文を5行目以降に追加
-        body_start_row = 5
         for body in article_bodies:
             data_to_write.append([body])
 
@@ -170,7 +173,6 @@ for idx, base_url in enumerate(input_urls, start=1):
         data_to_write.append([len(comments)])
 
         # コメントを17行目以降に追加
-        comment_start_row = 17
         for comment in comments:
             data_to_write.append([comment])
         
