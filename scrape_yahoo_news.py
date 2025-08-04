@@ -12,7 +12,6 @@ import json
 
 # Google Sheets認証
 try:
-    # GitHub Actionsのシークレットからcredentials.jsonを読み込む
     with open('credentials.json', 'r') as f:
         credentials_info = json.load(f)
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
@@ -23,11 +22,12 @@ except Exception as e:
     exit()
 
 # Google Sheets設定
-# INPUTのスプレッドシートID (https://docs.google.com/spreadsheets/d/19c6yIGr5BiI7XwstYhUPptFGksPPXE4N1bEq5iFoPok)
+# INPUTのスプレッドシートID: https://docs.google.com/spreadsheets/d/19c6yIGr5BiI7XwstYhUPptFGksPPXE4N1bEq5iFoPok/
 INPUT_SPREADSHEET_ID = '19c6yIGr5BiI7XwstYhUPptFGksPPXE4N1bEq5iFoPok'
-# OUTPUTのスプレッドシートID (https://docs.google.com/spreadsheets/d/1n7gXdU2Z3ykL7ys1LXFVRiGHI0VEcHsRZeK-Gr1ECVE)
+# OUTPUTのスプレッドシートID: https://docs.google.com/spreadsheets/d/1n7gXdU2Z3ykL7ys1LXFVRiGHI0VEcHsRZeK-Gr1ECVE/
 OUTPUT_SPREADSHEET_ID = '1n7gXdU2Z3ykL7ys1LXFVRiGHI0VEcHsRZeK-Gr1ECVE'
 DATE_STR = datetime.now().strftime('%y%m%d')
+BASE_SHEET = 'Base'
 
 # Selenium設定
 chrome_options = Options()
@@ -36,25 +36,16 @@ chrome_options.add_argument('--no-sandbox')
 chrome_options.add_argument('--disable-dev-shm-usage')
 browser = webdriver.Chrome(options=chrome_options)
 
-# ヘルパー関数: 列番号をアルファベットに変換
-def col_to_letter(col_num):
-    """Convert 1-based column number to a letter (e.g. 1 -> 'A', 27 -> 'AA')."""
-    string = ""
-    while col_num > 0:
-        col_num, remainder = divmod(col_num - 1, 26)
-        string = chr(65 + remainder) + string
-    return string
-
 # 入力スプレッドシートからURLを取得
 print(f"--- Getting URLs from sheet '{DATE_STR}' ---")
 sh_input = gc.open_by_key(INPUT_SPREADSHEET_ID)
 try:
     input_ws = sh_input.worksheet(DATE_STR)
-    # C列の2行目から読み込む
+    # C列の2行目以降から読み込む
     input_urls = [url for url in input_ws.col_values(3)[1:] if url]
     print(f"Found {len(input_urls)} URLs to process.")
 except gspread.WorksheetNotFound:
-    print(f"Worksheet '{DATE_STR}' not found. Exiting.")
+    print(f"Worksheet '{DATE_STR}' not found in input spreadsheet. Exiting.")
     browser.quit()
     exit()
 
@@ -72,16 +63,16 @@ if DATE_STR in [ws.title for ws in sh_output.worksheets()]:
 new_ws = sh_output.add_worksheet(title=DATE_STR, rows="100", cols=len(input_urls) + 1)
 print(f"Created new sheet: {new_ws.title}")
 
+# ヘッダーを1列目(A列)に書き込む
+headers = ['タイトル', '投稿日', 'URL', '本文1', '本文2', '本文3', '本文4', '本文5', '本文6', '本文7', '本文8', '本文9', '本文10', '本文11', '本文12', '本文13', '本文14', '本文15', '本文16', '本文17', 'コメント']
+new_ws.update('A1', [[h] for h in headers])
+
 # ニュース記事の処理
 print("--- Starting URL processing ---")
 if not input_urls:
     print("No URLs to process. Exiting.")
     browser.quit()
     exit()
-
-# ヘッダーを1列目(A列)に書き込む
-headers = ['タイトル', '投稿日', 'URL', '本文1', '本文2', '本文3', '本文4', '本文5', '本文6', '本文7', '本文8', '本文9', '本文10', '本文11', '本文12', '本文13', '本文14', '本文15', '本文16', '本文17', 'コメント']
-new_ws.update('A1', [[h] for h in headers])
 
 for idx, base_url in enumerate(input_urls, start=1):
     try:
@@ -91,53 +82,36 @@ for idx, base_url in enumerate(input_urls, start=1):
         
         # 記事本文、タイトル、投稿日の取得
         article_bodies = []
-        page = 1
-        print(f"    - Processing article body...")
-        while True:
-            url = base_url if page == 1 else f"{base_url}?page={page}"
-            res = requests.get(url, headers=headers_req)
-            soup = BeautifulSoup(res.text, 'html.parser')
-            if '指定されたURLは存在しませんでした' in res.text:
-                break
-            body_tag = soup.find('article')
-            body_text = body_tag.get_text(separator='\n').strip() if body_tag else ''
-            if not body_text or body_text in article_bodies:
-                break
-            article_bodies.append(body_text)
-            page += 1
-        print(f"    - Found {len(article_bodies)} body pages.")
+        res = requests.get(base_url, headers=headers_req)
+        soup = BeautifulSoup(res.text, 'html.parser')
+        
+        # タイトルの取得
+        title = soup.find('h1').get_text(strip=True) if soup.find('h1') else '取得不可'
+        
+        # 投稿日の取得
+        date_tag = soup.find('time')
+        article_date = date_tag.get_text(strip=True) if date_tag else '取得不可'
 
-        res_main = requests.get(base_url, headers=headers_req)
-        soup_main = BeautifulSoup(res_main.text, 'html.parser')
-        page_title = soup_main.title.string if soup_main.title else '取得不可'
-        title = page_title.replace(' - Yahoo!ニュース', '').strip() if page_title else '取得不可'
-        date_tag = soup_main.find('time')
-        article_date = date_tag.text.strip() if date_tag else '取得不可'
+        # 本文の取得
+        body_elements = soup.find_all('p', class_='sc-1f7c32y-14 dYlVjE')
+        article_bodies = [p.get_text(strip=True) for p in body_elements]
+
         print(f"    - Article Title: {title}")
         print(f"    - Article Date: {article_date}")
+        print(f"    - Found {len(article_bodies)} body paragraphs.")
 
         # コメント取得（Selenium使用）
         comments = []
-        comment_page = 1
-        print("    - Scraping comments with Selenium...")
-        while True:
-            comment_url = f"{base_url}/comments?page={comment_page}"
-            browser.get(comment_url)
-            time.sleep(2)
-            if '指定されたURLは存在しませんでした' in browser.page_source:
-                break
-            soup_comments = BeautifulSoup(browser.page_source, 'html.parser')
-            comment_paragraphs = soup_comments.find_all('p', class_='sc-169yn8p-10 hYFULX')
-            page_comments = [p.get_text(strip=True) for p in comment_paragraphs if p.get_text(strip=True)]
-            if not page_comments:
-                break
-            comments.extend(page_comments)
-            comment_page += 1
+        comment_url = f"{base_url}/comments"
+        browser.get(comment_url)
+        time.sleep(3) # 読み込みを待つ
+        soup_comments = BeautifulSoup(browser.page_source, 'html.parser')
+        comment_elements = soup_comments.find_all('p', class_='sc-fD-bZ kYJzEZ')
+        comments = [p.get_text(strip=True) for p in comment_elements]
         print(f"    - Found {len(comments)} comments.")
 
         # 出力シートに書き込み
         current_column_idx = idx + 1 # B列から開始
-        print(f"    - Writing data to column {col_to_letter(current_column_idx)}...")
         
         data_to_write = [
             [title],
@@ -150,10 +124,12 @@ for idx, base_url in enumerate(input_urls, start=1):
             data_to_write.append([body])
 
         # コメントを20行目以降に追加
-        empty_rows_count = 20 - len(data_to_write)
-        if empty_rows_count > 0:
-            data_to_write.extend([['']] * empty_rows_count)
+        # 現在のデータの行数に応じて空行を挿入
+        current_rows = len(data_to_write)
+        if current_rows < 20:
+            data_to_write.extend([['']] * (20 - current_rows))
 
+        # コメントを追加
         for comment in comments:
             data_to_write.append([comment])
 
