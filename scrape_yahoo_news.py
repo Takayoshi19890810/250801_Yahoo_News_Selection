@@ -65,7 +65,7 @@ if DATE_STR in [ws.title for ws in sh_output.worksheets()]:
     sh_output.del_worksheet(date_ws)
     print(f"Existing sheet '{DATE_STR}' deleted.")
 
-new_ws = sh_output.add_worksheet(title=DATE_STR, rows="100", cols=len(input_urls) + 1)
+new_ws = sh_output.add_worksheet(title=DATE_STR, rows="1000", cols=len(input_urls) + 1)
 print(f"Created new sheet: {new_ws.title}")
 
 # ヘッダーを1列目(A列)に書き込む
@@ -85,40 +85,60 @@ for idx, base_url in enumerate(input_urls, start=1):
         
         headers_req = {'User-Agent': 'Mozilla/5.0'}
         
-        # 記事本文、タイトル、投稿日の取得
-        res = requests.get(base_url, headers=headers_req)
-        soup = BeautifulSoup(res.text, 'html.parser')
-        
-        # タイトルの取得 (セレクタ修正)
-        title_tag = soup.find('h1', class_='sc-1f7c32y-2')
-        title = title_tag.get_text(strip=True) if title_tag else '取得不可'
-        
-        # 投稿日の取得
-        date_tag = soup.find('time')
-        article_date = date_tag.get_text(strip=True) if date_tag else '取得不可'
+        # 記事本文の取得（複数ページ対応）
+        article_bodies = []
+        page = 1
+        print("    - Processing article body...")
+        while True:
+            url = base_url if page == 1 else f"{base_url}?page={page}"
+            res = requests.get(url, headers=headers_req)
+            soup = BeautifulSoup(res.text, 'html.parser')
 
-        # 本文の取得 (セレクタ修正)
-        body_elements = soup.find_all('p', class_='sc-1f7c32y-14')
-        article_body_text = '\n'.join([p.get_text(strip=True) for p in body_elements])
-        
+            # 記事タイトルと投稿日は1ページ目のみから取得
+            if page == 1:
+                title_tag = soup.find('h1', class_='sc-1f7c32y-2')
+                title = title_tag.get_text(strip=True) if title_tag else '取得不可'
+                date_tag = soup.find('time')
+                article_date = date_tag.get_text(strip=True) if date_tag else '取得不可'
+            
+            # 本文部分を取得
+            body_elements = soup.find_all('p', class_='sc-1f7c32y-14')
+            body_text = '\n'.join([p.get_text(strip=True) for p in body_elements])
+            
+            # 本文が見つからない場合、またはページが重複している場合は終了
+            if not body_text or body_text in article_bodies:
+                break
+            
+            article_bodies.append(body_text)
+            page += 1
+            if page > 10:  # 無限ループ防止のための上限設定
+                break
+                
         print(f"    - Article Title: {title}")
         print(f"    - Article Date: {article_date}")
-        print(f"    - Found {len(body_elements)} body paragraphs.")
+        print(f"    - Found {len(article_bodies)} body pages.")
 
-        # コメント取得（Selenium使用）
+        # コメント取得（複数ページ対応）
         comments = []
-        comment_url = f"{base_url}/comments"
-        browser.get(comment_url)
-        
-        try:
-            WebDriverWait(browser, 10).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, 'p.sc-169yn8p-10'))
-            )
+        comment_page = 1
+        print("    - Scraping comments with Selenium...")
+        while True:
+            comment_url = f"{base_url}/comments?page={comment_page}"
+            browser.get(comment_url)
+            time.sleep(2) # 読み込みを待つ
+            
             soup_comments = BeautifulSoup(browser.page_source, 'html.parser')
             comment_elements = soup_comments.find_all('p', class_='sc-169yn8p-10')
-            comments = [p.get_text(strip=True) for p in comment_elements]
-        except Exception:
-            print("    - No comments found or timed out waiting for comments.")
+            page_comments = [p.get_text(strip=True) for p in comment_elements]
+            
+            # ページにコメントがないか、すでに取得済みのコメントページの場合は終了
+            if not page_comments or page_comments[0] in comments:
+                break
+            
+            comments.extend(page_comments)
+            comment_page += 1
+            if comment_page > 10: # 無限ループ防止のための上限設定
+                break
 
         print(f"    - Found {len(comments)} comments.")
 
@@ -130,16 +150,20 @@ for idx, base_url in enumerate(input_urls, start=1):
             [title],
             [article_date],
             [base_url],
-            [article_body_text],
         ]
+        
+        # 本文を別々の行に追加
+        if article_bodies:
+            data_to_write.append(['----- 本文 -----'])
+            data_to_write.extend([[p] for p in article_bodies])
         
         # コメントを別々の行に追加
         if comments:
-            data_to_write.append(['----- Comments -----'])
+            data_to_write.append(['----- コメント -----'])
             data_to_write.extend([[c] for c in comments])
         
         start_cell = f'{col_to_letter(current_column_idx)}1'
-        new_ws.update(start_cell, data_to_write)
+        new_ws.update(start_cell, data_to_write, value_input_option='USER_ENTERED')
         
         print(f"  - Successfully wrote data for URL {idx} to column {col_to_letter(current_column_idx)}")
 
