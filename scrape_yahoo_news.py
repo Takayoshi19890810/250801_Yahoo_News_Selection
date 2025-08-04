@@ -57,9 +57,18 @@ if DATE_STR in [ws.title for ws in sh_output.worksheets()]:
     print(f"Existing sheet '{DATE_STR}' deleted.")
 
 # 新しいシートを作成し、ヘッダーを1行目に設定
-new_ws = sh_output.add_worksheet(title=DATE_STR, rows="1000", cols="20") # colsの数を適宜調整
-header = ['No.', 'タイトル', 'URL', '発行日時', '本文', 'コメント数', 'コメント']
-new_ws.update('A1:G1', [header])
+new_ws = sh_output.add_worksheet(title=DATE_STR, rows="1000", cols="30") # colsの数を適宜調整
+header = ['No.', 'タイトル', 'URL', '発行日時', '本文']
+comment_cols = ['コメント数', 'コメント']
+header_row = header + [''] * 9 + comment_cols # 10列目(J列)まで空欄、11列目(K列)にコメント数、12列目(L列)以降にコメント
+
+# 空のヘッダーを作成
+full_header = [''] * 15 # O列まで空欄
+full_header[0:5] = ['No.', 'タイトル', 'URL', '発行日時', '本文']
+full_header[14] = 'コメント数'
+full_header[15:] = ['コメント'] * (len(full_header) - 15)
+
+new_ws.update('A1:P1', [full_header])
 print(f"Created new sheet: {new_ws.title}")
 
 # ニュース記事の処理
@@ -137,19 +146,19 @@ for idx, base_url in enumerate(input_urls, start=1):
 
         print(f"    - Found {len(comments)} comments.")
 
-        # データを1行にまとめる
-        row_data = [
-            idx,
-            title,
-            base_url,
-            article_date,
-            '\n\n'.join(article_bodies), # 本文を改行で結合
-            len(comments),
-            '\n\n'.join(comments) # コメントを改行で結合
-        ]
-        
+        # データを複数行にまとめる
+        # 1行目のデータ
+        row_data = [idx, title, base_url, article_date, article_bodies[0]]
+        row_data.extend([''] * 9) # O列まで空欄
+        row_data.append(len(comments))
+        row_data.extend(comments) # コメントはP列以降に記載
+
         all_data_to_write.append(row_data)
         
+        # 2ページ目以降の本文を次の行に追加
+        for i in range(1, len(article_bodies)):
+            all_data_to_write.append([''] * 4 + [article_bodies[i]] + [''] * 20) # 適切に空欄を追加
+
         print(f"  - Successfully processed data for URL {idx}. Storing for batch update.")
 
     except Exception as e:
