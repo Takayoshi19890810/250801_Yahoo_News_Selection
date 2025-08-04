@@ -162,12 +162,12 @@ for idx, base_url in enumerate(input_urls, start=1):
         # 本文を5行目以降に追加
         for body in article_bodies:
             data_to_write.append([body])
-
-        # コメント数の行まで空行で埋める
-        comment_count_row = 16
+        
+        # コメント数とコメントの間に空行を追加
+        comment_count_start_row = 16
         current_row_count = len(data_to_write)
-        if current_row_count < comment_count_row - 1:
-            data_to_write.extend([['']] * (comment_count_row - 1 - current_row_count))
+        if current_row_count < comment_count_start_row:
+            data_to_write.extend([['']] * (comment_count_start_row - current_row_count))
         
         # コメント数を16行目に追加
         data_to_write.append([len(comments)])
