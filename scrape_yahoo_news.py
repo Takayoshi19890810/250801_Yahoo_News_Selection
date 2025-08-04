@@ -69,8 +69,8 @@ new_ws = sh_output.add_worksheet(title=DATE_STR, rows="1000", cols=len(input_url
 print(f"Created new sheet: {new_ws.title}")
 
 # ヘッダーを1列目(A列)に書き込む
-headers = ['タイトル', '投稿日', 'URL', '本文', 'コメント']
-new_ws.update('A1', [[h] for h in headers])
+headers = ['No.', 'タイトル', 'URL', '発行日時', '本文', '', '', '', '', '', '', 'コメント数', 'コメント']
+new_ws.update('A1:A13', [[h] for h in headers])
 
 # ニュース記事の処理
 print("--- Starting URL processing ---")
@@ -89,6 +89,8 @@ for idx, base_url in enumerate(input_urls, start=1):
         article_bodies = []
         page = 1
         print("    - Processing article body...")
+        title = '取得不可'
+        article_date = '取得不可'
         while True:
             url = base_url if page == 1 else f"{base_url}?page={page}"
             res = requests.get(url, headers=headers_req)
@@ -147,20 +149,30 @@ for idx, base_url in enumerate(input_urls, start=1):
         
         # データをリストにまとめる
         data_to_write = [
-            [title],
-            [article_date],
-            [base_url],
+            [idx], # 1行目
+            [title], # 2行目
+            [base_url], # 3行目
+            [article_date] # 4行目
         ]
         
-        # 本文を別々の行に追加
-        if article_bodies:
-            data_to_write.append(['----- 本文 -----'])
-            data_to_write.extend([[p] for p in article_bodies])
+        # 本文を5行目以降に追加
+        body_start_row = 5
+        for body in article_bodies:
+            data_to_write.append([body])
+
+        # コメント数の行まで空行で埋める
+        comment_count_row = 16
+        current_row_count = len(data_to_write)
+        if current_row_count < comment_count_row - 1:
+            data_to_write.extend([['']] * (comment_count_row - 1 - current_row_count))
         
-        # コメントを別々の行に追加
-        if comments:
-            data_to_write.append(['----- コメント -----'])
-            data_to_write.extend([[c] for c in comments])
+        # コメント数を16行目に追加
+        data_to_write.append([len(comments)])
+
+        # コメントを17行目以降に追加
+        comment_start_row = 17
+        for comment in comments:
+            data_to_write.append([comment])
         
         start_cell = f'{col_to_letter(current_column_idx)}1'
         new_ws.update(start_cell, data_to_write, value_input_option='USER_ENTERED')
