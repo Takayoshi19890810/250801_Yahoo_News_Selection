@@ -2,7 +2,7 @@ name: Yahoo News Scraper
 
 on:
   schedule:
-    - cron: '30 5 * * *'  # JST 14:30
+    - cron: '0 7 * * *'  # JST 16:00
   workflow_dispatch:
 
 jobs:
@@ -40,7 +40,7 @@ jobs:
 
       - name: 📊 Install dependencies
         run: pip install -r requirements.txt
-      
+        
       - name: 🛠 Install jq
         run: sudo apt-get update && sudo apt-get install -y jq
 
