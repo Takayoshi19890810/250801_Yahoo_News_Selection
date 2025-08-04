@@ -89,19 +89,21 @@ for idx, base_url in enumerate(input_urls, start=1):
         res = requests.get(base_url, headers=headers_req)
         soup = BeautifulSoup(res.text, 'html.parser')
         
-        title_tag = soup.find('h1', class_='sc-eQWqj')
+        # タイトルの取得 (セレクタ修正)
+        title_tag = soup.find('h1', class_='sc-1f7c32y-2')
         title = title_tag.get_text(strip=True) if title_tag else '取得不可'
         
+        # 投稿日の取得
         date_tag = soup.find('time')
         article_date = date_tag.get_text(strip=True) if date_tag else '取得不可'
 
+        # 本文の取得 (セレクタ修正)
         body_elements = soup.find_all('p', class_='sc-1f7c32y-14')
-        article_bodies = [p.get_text(strip=True) for p in body_elements]
-        article_body_text = '\n'.join(article_bodies)
+        article_body_text = '\n'.join([p.get_text(strip=True) for p in body_elements])
         
         print(f"    - Article Title: {title}")
         print(f"    - Article Date: {article_date}")
-        print(f"    - Found {len(article_bodies)} body paragraphs.")
+        print(f"    - Found {len(body_elements)} body paragraphs.")
 
         # コメント取得（Selenium使用）
         comments = []
@@ -118,19 +120,23 @@ for idx, base_url in enumerate(input_urls, start=1):
         except Exception:
             print("    - No comments found or timed out waiting for comments.")
 
-        comment_text = '\n'.join(comments)
         print(f"    - Found {len(comments)} comments.")
 
         # 出力シートに書き込み
         current_column_idx = idx + 1 # B列から開始
         
+        # データをリストにまとめる
         data_to_write = [
             [title],
             [article_date],
             [base_url],
             [article_body_text],
-            [comment_text]
         ]
+        
+        # コメントを別々の行に追加
+        if comments:
+            data_to_write.append(['----- Comments -----'])
+            data_to_write.extend([[c] for c in comments])
         
         start_cell = f'{col_to_letter(current_column_idx)}1'
         new_ws.update(start_cell, data_to_write)
