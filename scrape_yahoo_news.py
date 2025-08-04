@@ -12,15 +12,6 @@ import requests
 from bs4 import BeautifulSoup
 import json
 
-# ヘルパー関数: 列番号をアルファベットに変換
-def col_to_letter(col_num):
-    """Convert 1-based column number to a letter (e.g. 1 -> 'A', 27 -> 'AA')."""
-    string = ""
-    while col_num > 0:
-        col_num, remainder = divmod(col_num - 1, 26)
-        string = chr(65 + remainder) + string
-    return string
-
 # Google Sheets認証
 try:
     with open('credentials.json', 'r') as f:
@@ -58,24 +49,18 @@ except gspread.WorksheetNotFound:
 
 # 出力スプレッドシートを設定
 sh_output = gc.open_by_key(OUTPUT_SPREADSHEET_ID)
-print(f"--- Checking output sheet for '240804' ---")
+print(f"--- Checking output sheet for '{DATE_STR}' ---")
 
 if DATE_STR in [ws.title for ws in sh_output.worksheets()]:
     date_ws = sh_output.worksheet(DATE_STR)
     sh_output.del_worksheet(date_ws)
     print(f"Existing sheet '{DATE_STR}' deleted.")
 
-new_ws = sh_output.add_worksheet(title=DATE_STR, rows="1000", cols=len(input_urls) + 1)
+# 新しいシートを作成し、ヘッダーを1行目に設定
+new_ws = sh_output.add_worksheet(title=DATE_STR, rows="1000", cols="20") # colsの数を適宜調整
+header = ['No.', 'タイトル', 'URL', '発行日時', '本文', 'コメント数', 'コメント']
+new_ws.update('A1:G1', [header])
 print(f"Created new sheet: {new_ws.title}")
-
-# ヘッダーを1列目(A列)に書き込む
-new_ws.update(range_name='A1', values=[['No.']])
-new_ws.update(range_name='A2', values=[['タイトル']])
-new_ws.update(range_name='A3', values=[['URL']])
-new_ws.update(range_name='A4', values=[['発行日時']])
-new_ws.update(range_name='A5', values=[['本文']])
-new_ws.update(range_name='A17', values=[['コメント数']])
-new_ws.update(range_name='A18', values=[['コメント']])
 
 # ニュース記事の処理
 print("--- Starting URL processing ---")
@@ -83,6 +68,9 @@ if not input_urls:
     print("No URLs to process. Exiting.")
     browser.quit()
     exit()
+
+# 全データを一時的に保持するリスト
+all_data_to_write = []
 
 for idx, base_url in enumerate(input_urls, start=1):
     try:
@@ -101,14 +89,12 @@ for idx, base_url in enumerate(input_urls, start=1):
             res = requests.get(url, headers=headers_req)
             soup = BeautifulSoup(res.text, 'html.parser')
 
-            # 記事タイトルと投稿日は1ページ目のみから取得
             if page == 1:
                 title_tag = soup.find('title')
                 title = title_tag.get_text(strip=True).replace(' - Yahoo!ニュース', '') if title_tag else '取得不可'
                 date_tag = soup.find('time')
                 article_date = date_tag.get_text(strip=True) if date_tag else '取得不可'
             
-            # 本文部分を取得
             article_body_container = soup.find('article')
             if article_body_container:
                 body_elements = article_body_container.find_all('p')
@@ -116,13 +102,12 @@ for idx, base_url in enumerate(input_urls, start=1):
             else:
                 body_text = ''
             
-            # 本文が見つからない場合、またはページが重複している場合は終了
             if not body_text or body_text in article_bodies:
                 break
             
             article_bodies.append(body_text)
             page += 1
-            if page > 10:  # 無限ループ防止のための上限設定
+            if page > 10:
                 break
                 
         print(f"    - Article Title: {title}")
@@ -136,59 +121,49 @@ for idx, base_url in enumerate(input_urls, start=1):
         while True:
             comment_url = f"{base_url}/comments?page={comment_page}"
             browser.get(comment_url)
-            time.sleep(2) # 読み込みを待つ
+            time.sleep(2)
             
             soup_comments = BeautifulSoup(browser.page_source, 'html.parser')
             comment_elements = soup_comments.find_all('p', class_='sc-169yn8p-10')
             page_comments = [p.get_text(strip=True) for p in comment_elements]
             
-            # ページにコメントがないか、すでに取得済みのコメントページの場合は終了
             if not page_comments or page_comments[0] in comments:
                 break
             
             comments.extend(page_comments)
             comment_page += 1
-            if comment_page > 10: # 無限ループ防止のための上限設定
+            if comment_page > 10:
                 break
 
         print(f"    - Found {len(comments)} comments.")
 
-        # 出力シートに書き込み
-        current_column_idx = idx + 1 # B列から開始
-        
-        # データをリストにまとめる
-        data_to_write = [
-            [idx], # 1行目
-            [title], # 2行目
-            [base_url], # 3行目
-            [article_date] # 4行目
+        # データを1行にまとめる
+        row_data = [
+            idx,
+            title,
+            base_url,
+            article_date,
+            '\n\n'.join(article_bodies), # 本文を改行で結合
+            len(comments),
+            '\n\n'.join(comments) # コメントを改行で結合
         ]
         
-        # 本文を5行目以降に追加
-        for body in article_bodies:
-            data_to_write.append([body])
-
-        # コメント数の行まで空行で埋める
-        comment_count_start_row = 17
-        current_row_count = len(data_to_write)
-        if current_row_count < comment_count_start_row:
-            data_to_write.extend([['']] * (comment_count_start_row - current_row_count))
+        all_data_to_write.append(row_data)
         
-        # コメント数を17行目に追加
-        data_to_write.append([len(comments)])
-
-        # コメントを18行目以降に追加
-        for comment in comments:
-            data_to_write.append([comment])
-        
-        start_cell = f'{col_to_letter(current_column_idx)}1'
-        new_ws.update(range_name=start_cell, values=data_to_write, value_input_option='USER_ENTERED')
-        
-        print(f"  - Successfully wrote data for URL {idx} to column {col_to_letter(current_column_idx)}")
+        print(f"  - Successfully processed data for URL {idx}. Storing for batch update.")
 
     except Exception as e:
         print(f"  - Error processing URL {idx}: {e}")
         print("  - An error occurred. Continuing to the next URL.")
+
+# 全URLの処理が完了したら、一括でシートに書き込み
+if all_data_to_write:
+    start_row = 2 # 2行目から開始
+    start_cell = f'A{start_row}'
+    new_ws.update(range_name=start_cell, values=all_data_to_write)
+    print(f"--- All processed data has been written to the sheet, starting from {start_cell} ---")
+else:
+    print("No data to write. The sheet will remain empty except for the header.")
 
 browser.quit()
 print("--- Scraping job finished ---")
