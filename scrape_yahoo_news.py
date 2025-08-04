@@ -69,8 +69,13 @@ new_ws = sh_output.add_worksheet(title=DATE_STR, rows="1000", cols=len(input_url
 print(f"Created new sheet: {new_ws.title}")
 
 # ヘッダーを1列目(A列)に書き込む
-headers = ['No.', 'タイトル', 'URL', '発行日時', '本文', '', '', '', '', '', '', 'コメント数', 'コメント']
-new_ws.update('A1:A13', [[h] for h in headers])
+new_ws.update(range_name='A1', values=[['No.']])
+new_ws.update(range_name='A2', values=[['タイトル']])
+new_ws.update(range_name='A3', values=[['URL']])
+new_ws.update(range_name='A4', values=[['発行日時']])
+new_ws.update(range_name='A5', values=[['本文']])
+new_ws.update(range_name='A16', values=[['コメント数']])
+new_ws.update(range_name='A17', values=[['コメント']])
 
 # ニュース記事の処理
 print("--- Starting URL processing ---")
@@ -162,8 +167,8 @@ for idx, base_url in enumerate(input_urls, start=1):
         # 本文を5行目以降に追加
         for body in article_bodies:
             data_to_write.append([body])
-        
-        # コメント数とコメントの間に空行を追加
+
+        # コメント数の行まで空行で埋める
         comment_count_start_row = 16
         current_row_count = len(data_to_write)
         if current_row_count < comment_count_start_row:
@@ -177,7 +182,7 @@ for idx, base_url in enumerate(input_urls, start=1):
             data_to_write.append([comment])
         
         start_cell = f'{col_to_letter(current_column_idx)}1'
-        new_ws.update(start_cell, data_to_write, value_input_option='USER_ENTERED')
+        new_ws.update(range_name=start_cell, values=data_to_write, value_input_option='USER_ENTERED')
         
         print(f"  - Successfully wrote data for URL {idx} to column {col_to_letter(current_column_idx)}")
 
