@@ -57,18 +57,15 @@ if DATE_STR in [ws.title for ws in sh_output.worksheets()]:
     print(f"Existing sheet '{DATE_STR}' deleted.")
 
 # 新しいシートを作成し、ヘッダーを1行目に設定
-new_ws = sh_output.add_worksheet(title=DATE_STR, rows="1000", cols="30") # colsの数を適宜調整
-header = ['No.', 'タイトル', 'URL', '発行日時', '本文']
-comment_cols = ['コメント数', 'コメント']
-header_row = header + [''] * 9 + comment_cols # 10列目(J列)まで空欄、11列目(K列)にコメント数、12列目(L列)以降にコメント
+new_ws = sh_output.add_worksheet(title=DATE_STR, rows="1000", cols="30")
+header = ['No.', 'タイトル', 'URL', '発行日時']
+body_headers = [f'本文({i}ページ)' for i in range(1, 11)] # 本文ヘッダーを10列分作成
+comment_headers = ['コメント数', 'コメント']
 
-# 空のヘッダーを作成
-full_header = [''] * 15 # O列まで空欄
-full_header[0:5] = ['No.', 'タイトル', 'URL', '発行日時', '本文']
-full_header[14] = 'コメント数'
-full_header[15:] = ['コメント'] * (len(full_header) - 15)
-
-new_ws.update('A1:P1', [full_header])
+# A1からQ1までを定義
+full_header = header + body_headers + comment_headers
+# Q列以降のコメントヘッダーは必要に応じて追加。ここでは動的に扱います。
+new_ws.update('A1', [full_header])
 print(f"Created new sheet: {new_ws.title}")
 
 # ニュース記事の処理
@@ -93,7 +90,7 @@ for idx, base_url in enumerate(input_urls, start=1):
         print("    - Processing article body...")
         title = '取得不可'
         article_date = '取得不可'
-        while True:
+        while page <= 10: # 最大10ページまで取得
             url = base_url if page == 1 else f"{base_url}?page={page}"
             res = requests.get(url, headers=headers_req)
             soup = BeautifulSoup(res.text, 'html.parser')
@@ -111,13 +108,11 @@ for idx, base_url in enumerate(input_urls, start=1):
             else:
                 body_text = ''
             
-            if not body_text or body_text in article_bodies:
+            if not body_text or (len(article_bodies) > 0 and body_text == article_bodies[-1]):
                 break
             
             article_bodies.append(body_text)
             page += 1
-            if page > 10:
-                break
                 
         print(f"    - Article Title: {title}")
         print(f"    - Article Date: {article_date}")
@@ -136,7 +131,7 @@ for idx, base_url in enumerate(input_urls, start=1):
             comment_elements = soup_comments.find_all('p', class_='sc-169yn8p-10')
             page_comments = [p.get_text(strip=True) for p in comment_elements]
             
-            if not page_comments or page_comments[0] in comments:
+            if not page_comments or (len(comments) > 0 and page_comments[0] == comments[-1]):
                 break
             
             comments.extend(page_comments)
@@ -146,19 +141,21 @@ for idx, base_url in enumerate(input_urls, start=1):
 
         print(f"    - Found {len(comments)} comments.")
 
-        # データを複数行にまとめる
-        # 1行目のデータ
-        row_data = [idx, title, base_url, article_date, article_bodies[0]]
-        row_data.extend([''] * 9) # O列まで空欄
+        # データを1行にまとめる
+        row_data = [idx, title, base_url, article_date]
+        
+        # 本文データを追加
+        row_data.extend(article_bodies)
+        # 10ページに満たない場合は空欄で埋める
+        row_data.extend([''] * (10 - len(article_bodies)))
+        
+        # コメント数とコメントを追加
         row_data.append(len(comments))
-        row_data.extend(comments) # コメントはP列以降に記載
+        row_data.extend([''] * 1) # P列を空欄にする
+        row_data.extend(comments) # Q列以降にコメントを配置
 
         all_data_to_write.append(row_data)
         
-        # 2ページ目以降の本文を次の行に追加
-        for i in range(1, len(article_bodies)):
-            all_data_to_write.append([''] * 4 + [article_bodies[i]] + [''] * 20) # 適切に空欄を追加
-
         print(f"  - Successfully processed data for URL {idx}. Storing for batch update.")
 
     except Exception as e:
@@ -167,10 +164,18 @@ for idx, base_url in enumerate(input_urls, start=1):
 
 # 全URLの処理が完了したら、一括でシートに書き込み
 if all_data_to_write:
+    # 複数行にまたがるデータ（コメントが多い場合など）に対応するため、一括更新を調整
+    max_cols = 0
+    for row in all_data_to_write:
+        if len(row) > max_cols:
+            max_cols = len(row)
+    
+    # 全ての行の列数を揃える
+    padded_data = [row + [''] * (max_cols - len(row)) for row in all_data_to_write]
+    
     start_row = 2 # 2行目から開始
-    start_cell = f'A{start_row}'
-    new_ws.update(range_name=start_cell, values=all_data_to_write)
-    print(f"--- All processed data has been written to the sheet, starting from {start_cell} ---")
+    new_ws.update(f'A{start_row}', padded_data)
+    print(f"--- All processed data has been written to the sheet, starting from A{start_row} ---")
 else:
     print("No data to write. The sheet will remain empty except for the header.")
 
